@@ -1,0 +1,191 @@
+Technologie:
+Backend: Next.js + NextAuth.js
+Baza Danych: MongoDB (z Mongoose jako ORM)
+Frontend: Next.js (komponenty w React)
+Styling: Tailwind CSS
+2. Krok po kroku – Implementacja
+Krok 1: Inicjalizacja projektu Next.js
+Utwórz projekt Next.js:
+
+bash
+Skopiuj kod
+npx create-next-app user-management-app
+Przejdź do katalogu projektu:
+
+bash
+Skopiuj kod
+cd user-management-app
+Krok 2: Instalacja NextAuth.js, Mongoose i MongoDB
+Zainstaluj NextAuth.js i Mongoose:
+
+bash
+Skopiuj kod
+npm install next-auth mongoose
+Zainstaluj Tailwind CSS:
+
+bash
+Skopiuj kod
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+Skonfiguruj Tailwind CSS w plikach tailwind.config.js i globals.css (zgodnie z dokumentacją Tailwind CSS).
+
+Krok 3: Konfiguracja MongoDB z Mongoose
+Załóż konto na MongoDB Atlas (jeśli jeszcze go nie masz) i utwórz darmowy klaster. Skopiuj URI połączenia z bazą danych.
+
+Utwórz plik konfiguracyjny do połączenia z MongoDB w lib/mongodb.js:
+
+javascript
+Skopiuj kod
+import mongoose from 'mongoose';
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+}
+
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
+async function connectToDatabase() {
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    }).then((mongoose) => mongoose);
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
+
+export default connectToDatabase;
+Dodaj zmienną środowiskową MONGODB_URI do pliku .env.local:
+
+bash
+Skopiuj kod
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/myFirstDatabase?retryWrites=true&w=majority
+Krok 4: Definicja modelu użytkownika z Mongoose
+Utwórz model użytkownika w models/User.js:
+javascript
+Skopiuj kod
+import mongoose from 'mongoose';
+
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  fullName: { type: String },
+  role: { type: String, default: 'user' },
+  isBlocked: { type: Boolean, default: false },
+  passwordHistory: { type: [String], default: [] },
+  passwordExpiry: { type: Date },
+});
+
+export default mongoose.models.User || mongoose.model('User', UserSchema);
+Krok 5: Konfiguracja NextAuth.js z MongoDB i Mongoose
+Utwórz plik konfiguracyjny NextAuth.js w pages/api/auth/[...nextauth].js:
+
+javascript
+Skopiuj kod
+import NextAuth from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import connectToDatabase from '../../../lib/mongodb';
+import User from '../../../models/User';
+import bcrypt from 'bcrypt';
+
+export default NextAuth({
+  providers: [
+    CredentialsProvider({
+      name: 'Credentials',
+      credentials: {
+        username: { label: 'Username', type: 'text' },
+        password: { label: 'Password', type: 'password' }
+      },
+      async authorize(credentials) {
+        await connectToDatabase();
+        const user = await User.findOne({ username: credentials.username });
+
+        if (user && await bcrypt.compare(credentials.password, user.password)) {
+          return { id: user._id, username: user.username, role: user.role };
+        }
+        return null;
+      }
+    })
+  ],
+  callbacks: {
+    async session({ session, token }) {
+      session.user = token.user;
+      return session;
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        token.user = { id: user.id, role: user.role, username: user.username };
+      }
+      return token;
+    }
+  },
+  session: {
+    jwt: true,
+  },
+  secret: process.env.JWT_SECRET,
+});
+Dodaj zmienną JWT_SECRET do pliku .env.local:
+
+makefile
+Skopiuj kod
+JWT_SECRET=twoj_sekret
+Krok 6: Tworzenie funkcji i interfejsu użytkownika
+Dodaj komponent logowania (components/Login.js):
+
+Wykorzystaj useSession i signIn z NextAuth.js, aby obsłużyć logowanie.
+Dodaj proste formularze przy użyciu Tailwind CSS.
+Stwórz stronę administracyjną (pages/admin.js), która będzie dostępna tylko dla administratora:
+
+Sprawdź rolę użytkownika przy użyciu useSession z NextAuth.js.
+Umożliwiaj administratorowi przeglądanie, dodawanie i blokowanie użytkowników za pomocą odpowiednich endpointów API (kolejny krok).
+Dodaj API do zarządzania użytkownikami w pages/api/users/:
+
+pages/api/users/addUser.js:
+
+javascript
+Skopiuj kod
+import connectToDatabase from '../../../lib/mongodb';
+import User from '../../../models/User';
+import bcrypt from 'bcrypt';
+
+export default async function handler(req, res) {
+  await connectToDatabase();
+  if (req.method === 'POST') {
+    const { username, password, fullName, role } = req.body;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({
+      username,
+      password: hashedPassword,
+      fullName,
+      role,
+    });
+
+    try {
+      await newUser.save();
+      res.status(201).json({ message: 'User created successfully' });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
+  }
+}
+Dodaj inne API (np. do blokowania użytkowników, przeglądania listy) w podobny sposób.
+
+Twórz interfejsy do zarządzania użytkownikami przy użyciu Reacta i Tailwind CSS, integrując je z API, które właśnie utworzyłeś.
+
+Podsumowanie
+To rozwiązanie Next.js + NextAuth.js + MongoDB (Mongoose) jest optymalne i zapewnia prostotę implementacji. Korzystając z NextAuth.js, automatyzujesz logowanie i zarządzanie sesjami, a Mongoose ułatwia pracę z bazą danych MongoDB. Tailwind CSS przyspiesza stylowanie, a Next.js umożliwia tworzenie zarówno frontendowej, jak i backendowej logiki w jednym projekcie.
