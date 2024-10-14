@@ -70,14 +70,18 @@ export default function Admin() {
     }
   };
 
-  const handleBlock = async (userId) => {
+  const handleBlockUser = async (userId) => {
     try {
-      await axios.patch(`/api/users/${userId}/block`);
-      fetchUsers();
-    } catch (err) {
-      setError('Nie udało się zablokować użytkownika.');
+      const response = await axios.put(`/api/users/${userId}`);
+      // Opcjonalnie zaktualizuj stan lub zaktualizuj listę użytkowników
+      fetchUsers(); // Odśwież listę użytkowników
+      setSuccess('Użytkownik zaktualizowany pomyślnie');
+    } catch (error) {
+      setError('Wystąpił błąd podczas blokowania użytkownika.');
     }
   };
+  
+  
 
   return (
     <div className="flex flex-col items-center">
@@ -130,7 +134,7 @@ export default function Admin() {
             <div>
               <button onClick={() => handleEdit(user)} className="text-blue-500 mx-2">Edytuj</button>
               <button onClick={() => handleDelete(user._id)} className="text-red-500 mx-2">Usuń</button>
-              <button onClick={() => handleBlock(user._id)} className="text-yellow-500">Zablokuj</button>
+              <button onClick={() => handleBlockUser(user._id)} className="text-yellow-500">Zablokuj</button>
             </div>
           </li>
         ))}
